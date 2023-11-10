@@ -1,7 +1,7 @@
 import os
 import argparse
 
-MemSize = 1000  # memory size, in reality, the memory size should be 2^32, but for this lab, for the space resaon,
+MemSize = 1000  # memory size, in reality, the memory size should be 2^32, but for this lab, for the space reason,
                 # we keep it as this large number, but the memory is still 32-bit addressable.
 
 
@@ -325,355 +325,39 @@ class SingleStageCore(Core):
 
 
 class FiveStageCore(Core):
-    def sign_ext(self, imm):
-        if imm[0] == '1':
-            s = imm[1:]
-            s = s.replace('1', '2')
-            s = s.replace('0', '1')
-            s = s.replace('2', '0')
-            s = int(s, 2) + 1
-            s = -s
-        else:
-            s = int(imm, 2)
-        return s
-
     def __init__(self, ioDir, imem, dmem):
-        super(FiveStageCore, self).__init__(ioDir + "/FS_", imem, dmem)
-        self.opFilePath = ioDir + "/StateResult_FS.txt"
-        self.opFilePath2 = ioDir + "/PerformanceMetrics.txt"
+        super(FiveStageCore, self).__init__(os.path.join(ioDir, "FS_"), imem, dmem)
+        self.opFilePath = os.path.join(ioDir, "StateResult_FS.txt")
 
-    def decoder(self, instruction):
-        oc, rd, rs1, rs2, reg_wr_en = 0, 0, 0, 0, 0
-        for i in range(0, len(instruction)):
-            oc = (instruction[25:32])
-            rd = (instruction[20:25])
-            rs1 = (instruction[12:17])
-            rs2 = (instruction[7:12])
-            if oc == "0110011":
-                reg_wr_en = 1
-            else:
-                reg_wr_en = 0
-
-        return rs1, rs2, rd, oc, reg_wr_en
-
-    def inttobinary(self, int):
-        if int >= 0:
-            int = bin(int)[2:].zfill(32)
-        else:
-            s = bin(-int)[3:].zfill(32)
-            s = s.replace('1', '2')
-            s = s.replace('0', '1')
-            s = s.replace('2', '0')
-            int = bin(int(s, 2) + 1)[2:]
-        return int
     def step(self):
         # Your implementation
-        instructions = self.ext_imem.readInstr()
-        dataMemory = self.ext_dmem.readInstr()
-        print("-------------------- This is 5 stage --------------------")
+        # --------------------- WB stage ---------------------
 
-        while (self.state.IF["nop"]==0 or self.state.ID["nop"]==0 or self.state.EX["nop"]==0 or self.state.MEM["nop"]==0 or self.state.WB["nop"]==0):
-            self.state.EX['StData'] = str(self.state.EX['StData']).zfill(32)
-            self.state.EX['Operand1'] = str(self.state.EX['Operand1']).zfill(32)
-            self.state.EX['Operand2'] = str(self.state.EX['Operand2']).zfill(32)
-            self.state.EX['DestReg'] = str(self.state.EX['DestReg']).zfill(5)
-            self.state.EX['alu_op'] = str(self.state.EX['alu_op']).zfill(2)
-            self.state.MEM['ALUresult'] = str(self.state.MEM['ALUresult']).zfill(32)
-            self.state.MEM['Store_data'] = str(self.state.MEM['Store_data']).zfill(32)
-            self.state.MEM['Wrt_reg_addr'] = str(self.state.MEM['Wrt_reg_addr']).zfill(5)
-            self.state.WB['Wrt_data'] = str(self.state.WB['Wrt_data']).zfill(32)
-            self.state.WB['Wrt_reg_addr'] = str(self.state.WB['Wrt_reg_addr']).zfill(5)
+        # --------------------- MEM stage --------------------
 
-            # --------------------- WB stage ---------------------
+        # --------------------- EX stage ---------------------
 
-            if 0 == self.state.WB['nop']:
-                if 1 == self.state.WB['wrt_enable']:
-                    self.myRF.writeRF(1, int(self.state.WB['Wrt_reg_addr'], 2),
-                                      int(dataMemory[self.state.EX['wrt_mem']], 2))
-                if self.state.IF['PC'] == len(instructions)*4-4:
-                    self.state.IF['nop'] = 1
+        # --------------------- ID stage ---------------------
 
-            # --------------------- MEM stage --------------------
+        # --------------------- IF stage ---------------------
 
-            if 0 == self.state.MEM['nop']:
-
-                if 0 == self.state.MEM['rd_mem']:
-                    self.nextState.WB['Wrt_data'] = self.state.MEM['ALUresult']
-
-                elif 1 == self.state.MEM['wrt_mem']:
-                    # need to store to memory
-                    if (0 == self.state.WB['nop']) and (1 == self.state.WB['wrt_enable']) and (
-                            self.state.WB['Wrt_reg_addr'] == self.state.MEM['Wrt_reg_addr']):
-                        self.state.MEM['Store_data'] = self.state.WB['Wrt_data']
-                    self.myRF.writeRF(1, int(self.state.MEM['ALUresult'],2), int(self.state.MEM['Store_data'], 2))
-                    self.nextState.WB['Wrt_data'] = self.state.MEM['Store_data']
-
-                elif self.state.MEM['wrt_enable'] and int(self.state.MEM['ALUresult'],2) != 0:
-                    self.myRF.writeRF(1, int(self.nextState.WB['Wrt_reg_addr'],2), int(self.state.MEM['ALUresult'], 2))
-                    self.nextState.WB['Wrt_data'] = self.state.MEM['ALUresult']
-                    add=int(self.nextState.WB['Wrt_reg_addr'],2)+4
-                    for u in range(1, 5):
-                        self.ext_dmem.DMem[add+u] = self.state.MEM['ALUresult'][(u - 1) * 8:u * 8]
-
-            self.nextState.WB['nop'] = self.state.MEM['nop']
-            self.nextState.WB['Wrt_reg_addr'] = self.state.MEM['Wrt_reg_addr']
-            self.nextState.WB['wrt_enable'] = self.state.MEM['wrt_enable']
-
-            # --------------------- EX stage ---------------------
-
-            self.nextState.MEM['nop'] = self.state.EX['nop']
-            num1 = int(self.state.EX['Operand1'], 2)
-            num2 = int(self.state.EX['Operand2'], 2)
-
-            if (self.state.EX['alu_op'] == "00"):
-                if (self.state.EX['Imm'] == 0):
-                    self.nextState.MEM['ALUresult'] = self.inttobinary(num1 + num2)
-                else:
-                    self.nextState.MEM['ALUresult'] = self.inttobinary(num1 - num2)
-            elif (self.state.EX['alu_op'] == "01"):
-                self.nextState.MEM['ALUresult'] = self.inttobinary(num1 ^ num2)
-            elif (self.state.EX['alu_op'] == "10"):
-                self.nextState.MEM['ALUresult'] = self.inttobinary(num1 | num2)
-            elif (self.state.EX['alu_op'] == "11"):
-                self.nextState.MEM['ALUresult'] = self.inttobinary(num1 & num2)
-
-            self.nextState.MEM['rd_mem'] = self.state.EX['rd_mem']
-            self.nextState.MEM['wrt_mem'] = self.state.EX['wrt_mem']
-            self.nextState.MEM['wrt_enable'] = self.state.EX['wrt_enable']
-            self.nextState.MEM['Wrt_reg_addr'] = self.state.EX['DestReg']
-            self.nextState.MEM['nop'] = self.state.EX['nop']
-            if (0 == self.state.EX['nop']):
-
-                # wb forwarding to rs1
-                if ((0 == self.state.WB['nop']) and (1 == self.state.WB['wrt_enable']) and (
-                        self.state.WB['Wrt_data'] == self.state.EX['Operand1'])):
-                    self.state.EX['Operand1'] = self.state.WB['Wrt_data']
-
-                # wb forwarding to rs2
-                if ((0 == self.state.WB['nop']) and (1 == self.state.WB['wrt_enable']) and (
-                        self.state.WB['Wrt_data'] == self.state.EX['Operand2'])):
-                    if (((0 == self.state.EX['is_I_type']) and (1 == self.state.EX['wrt_enable'])) or (
-                            1 == self.state.EX['wrt_mem'])):
-                        self.state.EX['Operand2'] = self.state.WB['Wrt_data']
-
-                # mem to ex
-                if ((0 == self.state.MEM['nop']) and (0 == self.state.MEM['rd_mem']) and (
-                        0 == self.state.MEM['wrt_mem']) and (
-                        1 == self.state.MEM['wrt_enable']) and (self.state.MEM['Store_data'] == self.state.EX['Operand1'])):
-                    self.state.EX['Operand1'] = self.state.MEM['ALUresult']
-
-                # mem to ex
-                if ((0 == self.state.MEM['nop']) and (0 == self.state.MEM['rd_mem']) and (
-                        0 == self.state.MEM['wrt_mem']) and (
-                        1 == self.state.MEM['wrt_enable']) and (self.state.MEM['Store_data'] == self.state.EX['Operand2'])):
-                    if ((0 == self.state.EX['is_I_type']) and (1 == self.state.EX['wrt_enable'])):
-                        self.state.EX['Operand2'] = self.state.MEM['ALUresult']
-
-                if (0 == self.state.EX['is_I_type']):
-                    if (1 == self.state.EX['wrt_enable']):
-                        num1 = int(self.state.EX['Operand1'],2)
-                        num2 = int(self.state.EX['Operand2'],2)
-                        if (self.state.EX['alu_op'] == '00'):
-                            if (self.state.EX['Imm']==0):
-                                self.nextState.MEM['ALUresult'] = self.inttobinary(num1 + num2)
-                            else:
-                                self.nextState.MEM['ALUresult'] = self.inttobinary(num1 - num2)
-                        elif (self.state.EX['alu_op'] == '01'):
-                            self.nextState.MEM['ALUresult'] = self.inttobinary(num1 ^ num2)
-                        elif (self.state.EX['alu_op'] == '10'):
-                            self.nextState.MEM['ALUresult'] = self.inttobinary(num1 | num2)
-                        elif (self.state.EX['alu_op'] == '11'):
-                            self.nextState.MEM['ALUresult'] = self.inttobinary(num1 & num2)
-                    else:
-                        self.nextState.MEM['ALUresult'] = 0
-
-                elif (1 == self.state.EX['is_I_type']):
-                    if (self.state.EX['alu_op'] == 0):
-                        if (self.state.EX['func7'] == "0000000"):
-                            self.nextState.MEM['ALUresult'] = self.state.EX['Operand1'] + self.sign_ext(self.state.EX['Imm'])
-                        else:
-                            self.nextState.MEM['ALUresult'] = self.state.EX['Operand1'] - self.sign_ext(self.state.EX['Imm'])
-                    elif (self.state.EX['alu_op'] == 1):
-                        self.nextState.MEM['ALUresult'] = self.state.EX['Operand1'] ^ self.sign_ext(self.state.EX['Imm'])
-                    elif (self.state.EX['alu_op'] == 2):
-                        self.nextState.MEM['ALUresult'] = self.state.EX['Operand1'] | self.sign_ext(self.state.EX['Imm'])
-                    elif (self.state.EX['alu_op'] == 3):
-                        self.nextState.MEM['ALUresult'] = self.state.EX['Operand1'] & self.sign_ext(self.state.EX['Imm'])
-
-                self.nextState.MEM['Store_data'] = self.state.EX['StData']
-                self.nextState.MEM['Wrt_reg_addr'] = self.state.EX['DestReg']
-                self.nextState.MEM['wrt_enable'] = self.state.EX['wrt_enable']
-                self.nextState.MEM['rd_mem'] = self.state.EX['rd_mem']
-                self.nextState.MEM['wrt_mem'] = self.state.EX['wrt_mem']
-
-            self.nextState.MEM['wrt_mem'] = self.state.EX['wrt_mem']
-            self.nextState.MEM['wrt_enable'] = self.state.EX['wrt_enable']
-            self.nextState.MEM['Wrt_reg_addr'] = self.state.EX['DestReg']
-            self.nextState.MEM['rd_mem'] = self.state.EX['rd_mem']
-
-            # --------------------- ID stage ---------------------
-
-            if (0 == self.state.ID['nop']):
-                Instr = self.state.ID['Instr']
-                opcode = Instr[25:32]
-                func7 = Instr[0:7]
-                func3 = Instr[17:20]
-                rd = Instr[20:25]
-                rs1 = Instr[12:17]
-                rs2 = Instr[7:12]
-
-                if (opcode == "0000011"):
-                    print("lw")
-                    imm = Instr[0:10]
-                    imm = sign_ext(imm) + int(rs1, 2)
-                    self.nextState.EX['DestReg'] = rd
-                    self.nextState.EX['is_I_type'] = 1
-                    self.nextState.EX['alu_op'] = '00'
-                    self.nextState.EX['wrt_enable'] = 1
-                    self.nextState.EX['rd_mem'] = 1
-                    self.nextState.EX['wrt_mem'] = imm
-                    self.nextState.EX['nop'] = 0
-
-                elif (opcode == "0100011"):
-                    print("sw")
-                    imm = Instr[0:7] + Instr[20:25]
-                    imm = (sign_ext(imm) + int(rs1, 2)) - 1
-
-                    self.nextState.EX['DestReg'] = rs2
-                    self.nextState.EX['is_I_type'] = 0
-                    self.nextState.EX['alu_op'] = '00'
-                    self.nextState.EX['wrt_enable'] = 0
-                    self.nextState.EX['rd_mem'] = 0
-                    self.nextState.EX['wrt_mem'] = 1
-
-                elif (opcode == "0110011"):
-                    self.nextState.EX['DestReg'] = rd
-                    self.nextState.EX['is_I_type'] = 0
-                    if (func7 == "0000000"):
-                        self.nextState.EX['func7'] = func7
-                        if (func3 == "000"):
-                            # add
-                            self.nextState.EX['alu_op'] = '00'
-                        elif (func3 == "100"):
-                            self.nextState.EX['alu_op'] = '01'
-                        elif (func3 == "110"):
-                            self.nextState.EX['alu_op'] = '10'
-                        elif (func3 == "111"):
-                            self.nextState.EX['alu_op'] = '11'
-
-                    elif (func7 == "0100000"):
-                        self.nextState.EX['alu_op'] = '00'
-
-                    self.nextState.EX['wrt_enable'] = 1
-                    self.nextState.EX['rd_mem'] = 1
-                    self.nextState.EX['wrt_mem'] = 0
-
-                    if (self.nextState.EX['nop'] == 0):
-                        self.nextState.EX['Operand1'] = dataMemory[int(rs1, 2) - 1]
-                        self.nextState.EX['Operand2'] = dataMemory[int(rs2, 2) - 1]
-
-                elif (opcode == "0110011"):
-                    self.nextState.EX['DestReg'] = rd
-                    self.nextState.EX['is_I_type'] = 1
-
-                    imm = Instr[0:12]
-                    op1 = self.myRF.readRF(rs1)
-                    op2 = sign_ext(imm)
-
-                    if (func3 == "000"):
-                        # addi
-                        self.nextState.EX['alu_op'] = '00'
-                    elif (func3 == "100"):
-                        self.nextState.EX['alu_op'] = '01'
-                    elif (func3 == "110"):
-                        self.nextState.EX['alu_op'] = '10'
-                    elif (func3 == "111"):
-                        self.nextState.EX['alu_op'] = '11'
-
-                    self.nextState.EX['wrt_enable'] = 1
-                    self.nextState.EX['rd_mem'] = 0
-                    self.nextState.EX['wrt_mem'] = 0
-
-                if (0 == self.state.EX['nop']) and (1 == self.state.EX['rd_mem']) and (
-                        self.state.EX['DestReg'] == rd) and (
-                        (self.state.EX['DestReg'] != 0) and (0 == self.nextState.EX['is_I_type'])):
-
-                    #  stall
-                    self.state.ID['nop'] = 0
-                    self.nextState.EX['nop'] = 1
-                    self.nextState.EX['DestReg'] = self.state.EX['DestReg']
-                    self.nextState.ID = self.state.ID
-                    self.nextState.IF = self.state.IF
-                    self.printState(self.nextState, self.cycle)
-                    self.myRF.outputRF(self.cycle)
-                    self.state = self.nextState
-                    self.nextState.EX['Halt'] = 1
-                    self.nextState.EX['rd_mem'] = 0
-                    self.cycle += 1
-                    continue
-
-            self.nextState.EX['nop'] = self.state.ID['nop']
-
-            # --------------------- IF stage ---------------------
-
-            if (self.state.IF["PC"] / 4 < len(instructions)):
-                if 0 == self.state.IF['nop']:
-                    instruction = instructions[int(self.state.IF["PC"] / 4)]
-                    if instruction != 0xffffffff:
-                        self.nextState.IF["PC"] = self.state.IF["PC"] + 4
-                        self.nextState.IF['nop'] = 0
-                    else:
-                        self.state.IF['nop'] = 1
-                        self.nextState.IF["PC"] = self.state.IF["PC"]
-                        self.nextState.IF['nop'] = 1
-
-                    self.nextState.ID['Instr'] = instruction
-            self.nextState.ID['nop'] = self.state.IF['nop']
-            if (self.cycle > 1000):
-                break
+        self.halted = True
+        if self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and \
+                self.state.WB["nop"]:
             self.halted = True
-            if self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]:
-                self.halted = True
-                break
 
-            self.myRF.outputRF(self.cycle)
-            self.printState(self.nextState, self.cycle)
-            self.state = self.nextState
-            self.cycle += 1
-
-        """
-                print("Average CPI is", averageCPIFF)
-                print("Instructions per cycle is", instructionsPerCycleFF)
-                print("Total execution cycles is", totalExecutionCycleFF)
-        """
-
+        self.myRF.outputRF(self.cycle)  # dump RF
+        self.printState(self.nextState, self.cycle)  # print states after executing cycle 0, cycle 1, cycle 2 ...
+        self.state = self.nextState  # The end of the cycle and updates the current state with the values calculated in this cycle
         self.cycle += 1
-        self.myRF.outputRF(self.cycle)
-        self.printState(self.nextState, self.cycle)
-        totalExecutionCycleSS = self.cycle+1
-        instructionsPerCycleSS = len(instructions) / totalExecutionCycleSS
-        averageCPISS = 1 / instructionsPerCycleSS
-
-        with open(self.opFilePath2, "a") as wf:
-            printstate = ["-------------------- Five Stage Core Performance Metrics --------------------" + "\n"]
-            printstate.append("Number of cycles taken: " + str(totalExecutionCycleSS) + "\n")
-            printstate.append("Cycles per instruction: " + str(averageCPISS) + "\n")
-            printstate.append("Instructions per cycle: " + str(instructionsPerCycleSS) + "\n")
-            printstate.append("\n")
-            wf.writelines(printstate)
 
     def printState(self, state, cycle):
         printstate = ["-" * 70 + "\n", "State after executing cycle: " + str(cycle) + "\n"]
-        printstate.extend("\n")
         printstate.extend(["IF." + key + ": " + str(val) + "\n" for key, val in state.IF.items()])
-        printstate.extend("\n")
         printstate.extend(["ID." + key + ": " + str(val) + "\n" for key, val in state.ID.items()])
-        printstate.extend("\n")
-        printstate.extend(["EX." + key + ": " + str(val) + "\n" for key, val in self.state.EX.items()])
-        printstate.extend("\n")
-        printstate.extend(["MEM." + key + ": " + str(val) + "\n" for key, val in self.state.MEM.items()])
-        printstate.extend("\n")
-        printstate.extend(["WB." + key + ": " + str(val) + "\n" for key, val in self.state.WB.items()])
+        printstate.extend(["EX." + key + ": " + str(val) + "\n" for key, val in state.EX.items()])
+        printstate.extend(["MEM." + key + ": " + str(val) + "\n" for key, val in state.MEM.items()])
+        printstate.extend(["WB." + key + ": " + str(val) + "\n" for key, val in state.WB.items()])
 
         if (cycle == 0):
             perm = "w"
@@ -681,13 +365,9 @@ class FiveStageCore(Core):
             perm = "a"
         with open(self.opFilePath, perm) as wf:
             wf.writelines(printstate)
-        with open(self.opFilePath2, "a") as wf:
-            printstate = []
-            wf.writelines(printstate)
 
 
 if __name__ == "__main__":
-
     # parse arguments for input file location
     parser = argparse.ArgumentParser(description='RV32I processor')
     parser.add_argument('--iodir', default="", type=str, help='Directory containing the input files.')
