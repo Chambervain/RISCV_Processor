@@ -685,42 +685,45 @@ if __name__ == "__main__":
     parser.add_argument('--iodir', default="", type=str, help='Directory containing the input files.')
     args = parser.parse_args()
 
-    testNum = args.iodir.split("/")[1]
-    print("The Test Case number is: ", testNum)
     outerDir = os.path.abspath("output_bz2306")
-    innerDir = os.path.join(outerDir, testNum)
-    ioDir = os.path.abspath(args.iodir)
+    inputDir = os.path.abspath("input")
 
-    print("IO Directory: ", ioDir)
-    print("Outer Directory: ", outerDir)
-    print("Inner Directory: ", innerDir)
+    print("The IO Input Directory: ", inputDir)
+    print("The Output Directory: ", outerDir)
+    print()
 
-    if not os.path.exists(outerDir):
-        os.mkdir(outerDir)
 
-    if not os.path.exists(innerDir):
-        os.mkdir(innerDir)
+    for entry in os.listdir(inputDir):
+        entryPath = os.path.join(inputDir, entry)
+        print("The Test Case number is: ", entry)
+        innerDir = os.path.join(outerDir, entry)
 
-    imem = InsMem("Imem", ioDir)
-    dmem_ss = DataMem("SS", ioDir)
-    dmem_fs = DataMem("FS", ioDir)
+        if os.path.isdir(entryPath):
+            print("The Test Case Directory: ", entryPath)
+            ioDir = entryPath
 
-    ssCore = SingleStageCore(ioDir, imem, dmem_ss)
-    fsCore = FiveStageCore(ioDir, imem, dmem_fs)
+            if not os.path.exists(outerDir):
+                os.mkdir(outerDir)
+            if not os.path.exists(innerDir):
+                os.mkdir(innerDir)
 
-    while (True):
-        if not ssCore.halted:
-            ssCore.step()
+            imem = InsMem("Imem", ioDir)
+            dmem_ss = DataMem("SS", ioDir)
+            dmem_fs = DataMem("FS", ioDir)
 
-        if not fsCore.halted:
-            fsCore.step()
+            ssCore = SingleStageCore(ioDir, imem, dmem_ss)
+            fsCore = FiveStageCore(ioDir, imem, dmem_fs)
 
-        if ssCore.halted:
-            break
+            while (True):
+                if not ssCore.halted:
+                    ssCore.step()
+                if not fsCore.halted:
+                    fsCore.step()
+                if ssCore.halted:
+                    break
+                if fsCore.halted:
+                    break
 
-        if fsCore.halted:
-            break
-
-    # dump SS and FS data mem.
-    dmem_ss.outputDataMem()
-    dmem_fs.outputDataMem()
+            # dump SS and FS data mem.
+            dmem_ss.outputDataMem()
+            dmem_fs.outputDataMem()

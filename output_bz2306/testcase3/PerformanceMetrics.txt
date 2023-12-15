@@ -1,0 +1,10 @@
+-------------------- Single Stage Performance Metrics --------------------
+Number of cycles taken: 28
+Cycles per instruction: 2.5454545454545454
+Instructions per cycle: 0.39285714285714285
+
+--------------------- Five Stage Performance Metrics ---------------------
+Number of cycles taken: 16
+Cycles per instruction: 1.4545454545454546
+Instructions per cycle: 0.6875
+
